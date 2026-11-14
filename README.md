@@ -1,58 +1,47 @@
-# Luquita
+# Luquita 💸
 
-Asistente financiero personal por Telegram, sin panel web. Node.js 24+, SQLite para la cola local, Google Sheets para los movimientos y Python/faster-whisper para transcribir audios en CPU. No utiliza servicios externos de IA ni requiere una clave de IA.
+Luquita es un asistente financiero personal que te permite registrar gastos e ingresos desde Telegram y llevar tus cuentas en Google Sheets. Podés escribirle un mensaje o mandarle una nota de voz, sin abrir la planilla cada vez que hacés una compra.
 
-## Preparación
+Su objetivo es hacer más fácil el hábito de anotar los movimientos del día a día y ayudarte a entender en qué se va tu plata.
 
-1. Instalá Node.js 24 o superior. Ejecutá `npm install`.
-2. Copiá `.env.example` a `.env` (PowerShell: `Copy-Item .env.example .env`).
-3. En Telegram, abrí **@BotFather**, ejecutá `/newbot` y agregá el token a `TELEGRAM_BOT_TOKEN`.
-4. Mandale `/start` a tu nuevo bot. Ejecutá `npm run check` y copiá tu identificador numérico en `TELEGRAM_USER_ID`. No ejecutes este diagnóstico mientras el bot esté corriendo.
-5. En Google Cloud, creá un proyecto, habilitá **Google Sheets API**, creá una cuenta de servicio y descargá una clave JSON. Guardala como `credentials.json` en la raíz (o configurá otra ruta).
-6. Compartí tu planilla con el `client_email` del JSON como **Editor**. No hace falta hacerla pública. No compartas tu contraseña de Google.
-7. Ejecutá nuevamente `npm run check`: lista las pestañas sin modificar nada. Configurá `SUMMARY_SHEET` con el nombre exacto del resumen. La planilla enlazada ya está configurada en `.env.example`.
-8. Para audios, instalá Python 3.10+ y ejecutá:
+## Cómo funciona
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
-```
+Mandás un mensaje como **“Gasté 8500 en supermercado”** o un audio diciendo **“Cargué veinte mil pesos de nafta”**. Luquita identifica el monto, la categoría y la fecha, y te muestra los datos para que los revises.
 
-En `.env`, usá `PYTHON_BIN=.venv/Scripts/python.exe`. Para empezar solamente con texto: `ENABLE_AUDIO=false`.
+Cuando confirmás, guarda el movimiento en Google Sheets y actualiza el resumen del mes. Si hay un error de conexión, conserva la operación pendiente y vuelve a intentarlo, evitando registrar dos veces el mismo gasto.
 
-9. Ejecutá `npm test` y después `npm start`.
+## Qué podés hacer
 
-## Uso
+- Registrar gastos e ingresos mediante texto o notas de voz.
+- Clasificar movimientos en categorías como alimentación, nafta, alquiler, entretenimiento o sueldo.
+- Usar la fecha del mensaje, indicar “ayer” o escribir una fecha específica.
+- Confirmar o cancelar cada movimiento antes de guardarlo.
+- Consultar las categorías disponibles y los registros pendientes desde Telegram.
+- Revisar y corregir los movimientos guardados directamente en la planilla.
 
-- `8500 supermercado`
-- `Gasté veinte mil pesos en nafta`
-- `500000 sueldo`
-- `3500 higiene 14/11/2026`
-- Audio con un solo movimiento, hasta 3 minutos / 20 MB.
-- `/categorias`, `/pendientes`, `/ayuda`.
+## Tus cuentas en una planilla
 
-Luquita interpreta y pide **Confirmar** o **Cancelar**. Solo registra después de confirmar. Si no entiende el monto o la categoría, pide reenviar el mensaje corregido. Acepta ARS; toma la fecha original del mensaje en Argentina, aunque se procese más tarde. Podés indicar “ayer” o DD/MM/AAAA. Los números hablados tienen soporte básico, no comprensión general de lenguaje: revisá siempre la confirmación, especialmente al dictar decimales.
+Google Sheets conserva el detalle de cada operación en una pestaña **Movimientos**, con su fecha, categoría, monto y descripción. El resumen mensual reúne esos importes junto con los valores que ya tenías cargados.
 
-## Cómo modifica tu planilla
+Así, Telegram sirve para anotar rápidamente y la planilla para consultar tus cuentas, comparar meses y analizar tus gastos. Luquita no tiene panel web.
 
-La primera operación confirmada crea la pestaña **Movimientos** (ID, fecha, mes, tipo, categoría, monto, moneda, descripción) y conecta el resumen a ella. Conserva los importes y fórmulas anteriores como base: `=(importe anterior)+SUMIFS(...)`. No cambia formatos ni categorías existentes. Se espera tu estructura actual: categorías en A, meses enero–diciembre en B:M y el año en el título. Detecta la fila de meses aunque haya filas vacías arriba.
+## Audios sin una API de IA paga
 
-Antes de cambiar fórmulas guarda una copia de los valores/fórmulas de A1:M100 en `data/resumen-backup-*.json`. Es un respaldo de ese rango, no una copia completa del archivo. Es recomendable duplicar también la hoja antes de la primera puesta en marcha. Si hay importes guardados como texto, detiene la conexión para que los conviertas a números.
+Las notas de voz se transcriben con Whisper en el equipo donde corre Luquita. El audio no se envía a un proveedor externo de IA para transcribirlo y no hace falta pagar una API por cada mensaje. Telegram y Google Sheets sí requieren conexión a internet.
 
-Los totales del resumen dependen de sus fórmulas existentes. No se reparan totales manuales o fórmulas que ya estuvieran incorrectas. El año queda limitado a `SUMMARY_YEAR` para evitar cargar gastos en el año equivocado.
+La interpretación utiliza reglas y categorías definidas. Puede pedirte que reformules un mensaje si encuentra datos ambiguos; por eso, siempre te muestra el resultado antes de registrarlo.
 
-Para corregir una operación ya guardada, editá el monto/categoría/fecha/mes de su fila en **Movimientos**; el resumen recalcula. Para anularla, dejá su monto en 0. Conservá el ID: evita duplicados. No edites manualmente las celdas vinculadas del resumen porque quitarías su fórmula. No hay comando de deshacer todavía.
+## Pensada para uso personal
 
-## Persistencia y operación
+Luquita acepta mensajes privados de un único usuario autorizado y trabaja con pesos argentinos. Guarda los pendientes en una cola local para poder continuar después de un reinicio o una interrupción de conexión.
 
-Los mensajes autorizados se guardan en SQLite antes de confirmar su recepción a Telegram. Los errores de conexión o transcripción reintentan con espera progresiva de hasta 5 minutos. `/pendientes` permite ver operaciones en espera. La confirmación de guardado se envía cuando Sheets responde correctamente. Una caída durante el envío puede repetir una respuesta de Telegram; el registro en Sheets se comprueba por ID antes de cada reintento.
+Para procesar mensajes necesita estar ejecutándose en una computadora o servidor. La transcripción puede tardar según los recursos del equipo, y Telegram conserva los mensajes todavía no recibidos por el bot durante un máximo de 24 horas.
 
-Ejecutá **una sola instancia** del bot y no ordenes/eliminés IDs de Movimientos durante una escritura. Conservá `data/` en un disco persistente y respaldalo: contiene cola, transcripciones y mensajes financieros. No subas `.env`, claves o `data/` al repositorio. Si se pierde el disco, se pierde la cola aún no enviada; los movimientos ya guardados permanecen en Google Sheets.
+## Tecnologías
 
-La computadora debe estar encendida para procesar. Telegram retiene actualizaciones pendientes como máximo 24 horas; no sirve dejarla apagada varios días si esperás recuperar todos los mensajes. En hosting usá un proceso continuo con almacenamiento persistente (no un servicio que duerma por falta de tráfico HTTP). No necesita dominio ni puerto público. Detené con Ctrl+C; puede tardar hasta que termine la descarga/transcripción actual.
+- **Node.js:** bot de Telegram, interpretación de mensajes y conexión con Google Sheets.
+- **SQLite:** almacenamiento local de operaciones y reintentos.
+- **Python y faster-whisper:** transcripción local de notas de voz.
+- **Google Sheets:** historial de movimientos y resumen mensual.
 
-Whisper descarga el modelo la primera vez; luego transcribe localmente desde caché. Telegram y Google siguen usando internet. `base` es el modelo inicial; `tiny` consume menos recursos y puede equivocarse más. Probá audios reales antes de elegir el hosting. Si faltan Python o dependencias, los audios quedan pendientes y se reintentan hasta corregir la instalación.
-
-## Validación
-
-`npm test` verifica importes, categorías, fechas, autorización, persistencia, fórmulas y deduplicación después de una escritura con respuesta perdida. `npm run check` comprueba acceso real sin editar la planilla. La prueba completa requiere tus credenciales y un audio real.
+Las credenciales y los datos financieros se mantienen fuera del repositorio.

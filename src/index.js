@@ -4,7 +4,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { config } from './config.js';
 import { Store } from './store.js';
 import { Sheets } from './sheets.js';
-import { Telegram } from './telegram.js';
+import { Telegram,telegramError } from './telegram.js';
 import { transcribe } from './audio.js';
 import { parseExpense,categories } from './parser.js';
 import { DatabaseSync } from 'node:sqlite';
@@ -30,7 +30,12 @@ async function poll(){
         store.receive(update,c.userId);
         if(update.callback_query?.from?.id===c.userId) await telegram.call('answerCallbackQuery',{callback_query_id:update.callback_query.id,text:'Solicitud recibida.'}).catch(()=>{});
       }
-    } catch {console.error('No se pudo consultar Telegram. Reintento en 5 segundos.');await sleep(5000);}
+    } catch(error){
+      console.error(`No se pudo consultar Telegram: ${telegramError(error,c.token)}. Reintento en 5 segundos.`);
+      if(error.code===409) console.error('Conflicto de recepción: verificá que no haya otra instancia del bot o un webhook activo.');
+      if(error.code===401||error.code===404) console.error('Revisá TELEGRAM_BOT_TOKEN en las variables de entorno del servidor.');
+      await sleep(5000);
+    }
   }
 }
 async function processJob(job){
